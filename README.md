@@ -1,36 +1,90 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# もじメモ
 
-## Getting Started
+ふつうの日本語で入力したメモを、ひらがなの読みに直して「ハンター文字」風の記号文字で表示するメモアプリです。
+Next.js（TypeScript）製で、ブラウザでも Windows のデスクトップアプリ（Electron）としても動きます。
 
-First, run the development server:
+## 主な機能
+
+- **入力した日本語を記号文字で表示**：漢字・カタカナに変換しても、読みのひらがなで描きます（形態素解析：kuromoji）
+- **プロジェクト管理**：メモを保管先ごとに分けられ、プロジェクト名も記号文字で表示
+- **AI要約**：自分の API キー（Claude / OpenAI / Gemini）を登録すると、本文と添付画像をまとめて要約
+- **自由なレイアウト**：画像の移動・拡大縮小・回転（1度単位）、ダブルクリックした位置からの入力
+- **文字の装飾**：大きさ（6〜200、0.5刻み）と色
+- **英数字モード**：英字・数字を読みに変換せず、そのまま表示
+- **署名**：新しいメモの末尾に自動で入る署名
+- **PDF保存**：メモの中身だけを A4 の PDF に出力
+- **端末間の同期（任意）**：Supabase でメモ・画像・配置を同期
+
+## 必要なもの
+
+- Node.js 20 以上（開発は Node.js 25 で確認）
+- 端末間の同期を使う場合のみ：Supabase のプロジェクト
+
+## 起動（ブラウザ版）
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+http://localhost:3000 を開きます。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## デスクトップアプリ（Windows）
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+アプリの中で Next.js のサーバーを動かす方式なので、Vercel などの公開先は不要です。AI要約と同期以外はオフラインでも動きます。
 
-## Learn More
+| コマンド | 内容 |
+|---|---|
+| `npm run desktop` | 開発用。先に別のターミナルで `npm run dev` を起動しておく |
+| `npm run desktop:pack` | `dist/win-unpacked/MojiMemo.exe` を作る（インストール不要） |
+| `npm run desktop:build` | `dist/` にインストーラーを作る |
 
-To learn more about Next.js, take a look at the following resources:
+- 内蔵サーバーは `127.0.0.1:47831` 固定です。保存データがこのアドレスにひも付くため、変えると既存のメモが見えなくなります。
+- コード署名をしていないため、他の PC では Windows の警告（SmartScreen）が出ます。
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 端末間の同期（任意・Supabase）
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+設定しなければ、メモはブラウザ（またはアプリ）の中にだけ保存されます。
 
-## Deploy on Vercel
+1. Supabase でプロジェクトを作成する
+2. SQL Editor で [`supabase/schema.sql`](supabase/schema.sql) を実行する
+3. プロジェクト直下に `.env.local` を作り、次の2つを設定する（値は Supabase の「Connect」ボタンから確認できます）
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=
+   ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+   キーは公開用（Publishable / anon）だけを使ってください。Secret key / service_role は絶対に入れないでください。
+4. 開発サーバーを再起動する（デスクトップアプリは作り直す）
+5. 画面右上の雲アイコンから新規登録・ログインする
+
+`.env.local` は `.gitignore` の対象で、リポジトリには含まれません。デスクトップアプリでは、この値がビルド時にアプリへ埋め込まれます。
+
+同期は「あとから保存した方が残る」方式です。各テーブルは行レベルセキュリティで本人だけが読み書きできます。
+
+## AI要約について
+
+各社が公式に認めている「自分の API キーを使う」方式です。キーはブラウザの localStorage にだけ保存され、要約のときにサーバー経由で各社の API へ送られます（サーバー側では保存もログ出力もしません）。ChatGPT や Claude の月額プランのログイン情報を使う方式は、各社の利用規約に反するため採用していません。
+
+## フォルダー構成
+
+| 場所 | 内容 |
+|---|---|
+| `src/components/` | 画面（`App.tsx` がメイン、`HunterText.tsx` が記号文字の描画） |
+| `src/lib/glyphs.ts` | 記号文字の字形（SVG パス）。字形を直すときはここだけ編集 |
+| `src/lib/kana.ts` / `reading.ts` | ひらがな読みへの変換 |
+| `src/lib/merge.ts` / `useSync.ts` / `supabase.ts` | 同期 |
+| `src/lib/ai/` / `src/app/api/` | AI要約と読み変換の API |
+| `electron/` | デスクトップアプリ（ウィンドウ、PDF保存、ビルド準備、アイコン） |
+| `supabase/schema.sql` | 同期用のテーブル定義 |
+
+## 既知の制限
+
+- 読みは辞書ベースのため、文脈で読みが変わる語（例：「行った」）は誤ることがあります。
+- 数字の読みは1桁ずつです（12 → いちに）。
+- PDF のページ区切りは調整していません。縦に長いメモでは画像や文字が境目で切れることがあります。
+
+## 注意
+
+「ハンター文字」は漫画『HUNTER×HUNTER』に登場する架空の文字です。このリポジトリは個人の学習用に作った非公式のファンメイドで、原作者・出版社とは関係ありません。

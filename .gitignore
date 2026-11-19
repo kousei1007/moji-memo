@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# desktop app build output
+/dist/
+
+# local tool settings
+/.claude/
